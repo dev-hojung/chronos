@@ -101,3 +101,36 @@ export function listRuns(query: ListRunsQuery) {
 export function getUpcoming() {
   return apiFetch<UpcomingRoutine[]>('/routines/upcoming');
 }
+
+// ── Proposals ────────────────────────────────────────────────────────────────
+
+export interface RoutineProposal {
+  id: string;
+  routineId: string;
+  proposedChange: {
+    newCron?: string;
+    newDurationMin?: number;
+  };
+  diagnosis: string;
+  confidence: number;
+  appliedAt: string | null;
+  revertedAt: string | null;
+  autoBlockedUntil: string | null;
+  createdAt: string;
+}
+
+export function analyzeRoutines() {
+  return apiFetch<{ routineId: string; appliedAt: string | null }[]>('/routines/analyze', {
+    method: 'POST',
+  });
+}
+
+export function listProposals() {
+  return apiFetch<RoutineProposal[]>('/routines/proposals');
+}
+
+export function revertProposal(id: string) {
+  return apiFetch<{ reverted: boolean }>(`/routines/proposals/${id}/revert`, {
+    method: 'POST',
+  });
+}

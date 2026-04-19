@@ -6,7 +6,15 @@ import { Heading } from '../../components/Heading';
 import { Text } from '../../components/Text';
 import { Card } from '../../components/Card';
 import { RoutineHeatmap } from '../../components/RoutineHeatmap';
-import { useRoutine, useDeleteRoutine, useRecordRun, useUpcoming } from '../../lib/queries/routine';
+import { ProposalCard } from '../../components/ProposalCard';
+import {
+  useRoutine,
+  useDeleteRoutine,
+  useRecordRun,
+  useUpcoming,
+  useProposals,
+  useRevertProposal,
+} from '../../lib/queries/routine';
 import type { RoutineRunStatus } from '../../lib/api/routine';
 
 const STATUS_LABEL: Record<RoutineRunStatus, string> = {
@@ -21,10 +29,18 @@ export default function RoutineDetailScreen() {
   const router = useRouter();
   const { data: routine, isLoading } = useRoutine(id ?? '');
   const { data: upcoming = [] } = useUpcoming();
+  const { data: allProposals = [] } = useProposals();
   const deleteRoutine = useDeleteRoutine();
   const recordRun = useRecordRun();
+  const revertProposal = useRevertProposal();
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const upcomingForThis = upcoming.find((u) => u.routineId === id);
+  const routineProposals = allProposals.filter((p) => p.routineId === id);
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const recentAutoApplied = routineProposals.filter(
+    (p) => p.appliedAt != null && new Date(p.appliedAt) >= sevenDaysAgo && p.revertedAt == null,
+  );
   const todaySlots = (upcomingForThis?.slots ?? []).filter((s) => {
     const d = new Date(s.scheduledAt);
     const now = new Date();
@@ -155,6 +171,47 @@ export default function RoutineDetailScreen() {
             </View>
           ))}
         </View>
+
+        {/* Auto-applied banner */}
+        {recentAutoApplied.length > 0 && (
+          <Card tone="accent" className="mt-4">
+            <Text size="sm" className="font-semibold">
+              최근 7일 내 AI 조정 자동 적용됨 ({recentAutoApplied.length}건)
+            </Text>
+          </Card>
+        )}
+
+        {/* AI 조정 히스토리 아코디언 */}
+        {routineProposals.length > 0 && (
+          <View className="mt-4">
+            <TouchableOpacity
+              onPress={() => setHistoryOpen((v) => !v)}
+              className="flex-row items-center justify-between py-2"
+            >
+              <Text size="sm" className="font-semibold">
+                AI 조정 히스토리
+              </Text>
+              <Text size="sm" tone="muted">
+                {historyOpen ? '▲' : '▼'}
+              </Text>
+            </TouchableOpacity>
+            {historyOpen && (
+              <View className="mt-2">
+                {routineProposals.map((p) => (
+                  <ProposalCard
+                    key={p.id}
+                    proposal={p}
+                    onRevert={
+                      p.appliedAt != null && p.revertedAt == null
+                        ? (pid) => revertProposal.mutate(pid)
+                        : undefined
+                    }
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        )}
       </ScrollView>
     </Screen>
   );

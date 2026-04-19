@@ -11,6 +11,8 @@ import { UpdateRoutineDto } from './dto/update-routine.dto';
 import { CompleteRunDto } from './dto/complete-run.dto';
 import { ListRunsDto } from './dto/list-runs.dto';
 import { RoutineRunStatus } from '@prisma/client';
+import { analyzeRoutine } from './analyzer';
+import type { RunLike } from './analyzer';
 
 // Lightweight cron-next calculator — uses CronExpressionParser (cron-parser v3+)
 // Falls back to a simple daily guess if the package is unavailable.
@@ -309,6 +311,203 @@ export class RoutineService {
         })),
       };
     });
+  }
+
+  // ── Proposal / Analyze ──────────────────────────────────────────────────────
+
+  async analyzeAndProposeForUser(userId: string) {
+    const routines = await this.listRoutines(userId);
+    const active = routines.filter((r) => r.active);
+    const since = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000);
+    const results: Array<{ routineId: string; appliedAt: Date | null }> = [];
+
+    for (const routine of active) {
+      // Load recent 4-week runs
+      let runs: RunLike[];
+      if (this.useMemory) {
+        runs = [...this.memRuns.values()]
+          .filter((r) => r.routineId === routine.id && r.scheduledAt >= since)
+          .map((r) => ({
+            routineId: r.routineId,
+            scheduledAt: r.scheduledAt,
+            status: (r.status as string).toUpperCase(),
+            actualDurationMin: r.actualDurationMin ?? null,
+            completedAt: r.completedAt ?? null,
+          }));
+      } else {
+        const dbRuns = await this.prisma.routineRun.findMany({
+          where: { routineId: routine.id, scheduledAt: { gte: since } },
+        });
+        runs = dbRuns.map((r) => ({
+          routineId: r.routineId,
+          scheduledAt: r.scheduledAt,
+          status: r.status as string,
+          actualDurationMin: r.actualDurationMin ?? null,
+          completedAt: r.completedAt ?? null,
+        }));
+      }
+
+      // Determine last manual edit time from audit
+      let lastManualEditAt: Date | undefined;
+      if (!this.useMemory) {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const auditEntry = await this.prisma.auditLog.findFirst({
+          where: {
+            userId,
+            actionType: 'routine.update',
+            createdAt: { gte: sevenDaysAgo },
+            payload: { path: ['routineId'], equals: routine.id },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (auditEntry) lastManualEditAt = auditEntry.createdAt;
+      }
+
+      const diagResult = analyzeRoutine(
+        { id: routine.id, title: routine.title, scheduleCron: routine.scheduleCron, durationMin: routine.durationMin },
+        runs,
+        lastManualEditAt,
+      );
+
+      if (!diagResult) continue;
+
+      if (this.useMemory) {
+        this.logger.log(`[memory] proposal for ${routine.id}: ${diagResult.diagnosis}`);
+        results.push({ routineId: routine.id, appliedAt: null });
+        continue;
+      }
+
+      // Check autoBlockedUntil on existing proposals
+      const blocked = await this.prisma.routineProposal.findFirst({
+        where: {
+          routineId: routine.id,
+          autoBlockedUntil: { gt: new Date() },
+        },
+      });
+
+      const proposal = await this.prisma.routineProposal.create({
+        data: {
+          routineId: routine.id,
+          proposedChange: diagResult.proposedChanges as object,
+          diagnosis: diagResult.diagnosis,
+          confidence: diagResult.confidence,
+        },
+      });
+
+      let appliedAt: Date | null = null;
+
+      if (diagResult.applyAutomatically && !blocked) {
+        const prev = {
+          routineId: routine.id,
+          scheduleCron: routine.scheduleCron,
+          durationMin: routine.durationMin,
+          version: routine.version,
+        };
+        await this.auditService.record(userId, 'routine.proposalApply', {
+          proposalId: proposal.id,
+          routineId: routine.id,
+          prev,
+        }, 14 * 24 * 60); // 14-day undo window
+
+        const updateData: Record<string, unknown> = { version: { increment: 1 } };
+        if (diagResult.proposedChanges.newCron) {
+          updateData['scheduleCron'] = diagResult.proposedChanges.newCron;
+        }
+        if (diagResult.proposedChanges.newDurationMin) {
+          updateData['durationMin'] = diagResult.proposedChanges.newDurationMin;
+        }
+
+        await this.prisma.routine.update({ where: { id: routine.id }, data: updateData });
+        appliedAt = new Date();
+        await this.prisma.routineProposal.update({
+          where: { id: proposal.id },
+          data: { appliedAt },
+        });
+      }
+
+      results.push({ routineId: routine.id, appliedAt });
+    }
+
+    return results;
+  }
+
+  async listProposals(userId: string) {
+    if (this.useMemory) return [];
+
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    return this.prisma.routineProposal.findMany({
+      where: {
+        routine: { userId },
+        createdAt: { gte: since },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async revertProposal(userId: string, proposalId: string) {
+    if (this.useMemory) {
+      throw new ForbiddenException('Revert not supported in memory mode');
+    }
+
+    const proposal = await this.prisma.routineProposal.findUnique({
+      where: { id: proposalId },
+      include: { routine: true },
+    });
+    if (!proposal) throw new NotFoundException('Proposal not found');
+    if (proposal.routine.userId !== userId) throw new ForbiddenException();
+    if (proposal.revertedAt) throw new ForbiddenException('Already reverted');
+    if (!proposal.appliedAt) throw new ForbiddenException('Proposal was not applied');
+
+    // Find the audit entry with prev values
+    const auditEntry = await this.prisma.auditLog.findFirst({
+      where: {
+        userId,
+        actionType: 'routine.proposalApply',
+        payload: { path: ['proposalId'], equals: proposalId },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (auditEntry) {
+      const payload = auditEntry.payload as {
+        prev: { scheduleCron?: string; durationMin?: number; version?: number };
+      };
+      const prev = payload.prev ?? {};
+      const restoreData: Record<string, unknown> = {};
+      if (prev.scheduleCron !== undefined) restoreData['scheduleCron'] = prev.scheduleCron;
+      if (prev.durationMin !== undefined) restoreData['durationMin'] = prev.durationMin;
+      if (prev.version !== undefined) restoreData['version'] = prev.version;
+
+      if (Object.keys(restoreData).length > 0) {
+        await this.prisma.routine.update({
+          where: { id: proposal.routineId },
+          data: restoreData,
+        });
+      }
+    }
+
+    await this.prisma.routineProposal.update({
+      where: { id: proposalId },
+      data: { revertedAt: new Date() },
+    });
+
+    // Detect consecutive 2 reverts → block auto-apply for 8 weeks
+    const recentReverts = await this.prisma.routineProposal.count({
+      where: {
+        routineId: proposal.routineId,
+        revertedAt: { not: null },
+      },
+    });
+
+    if (recentReverts >= 2) {
+      const blockUntil = new Date(Date.now() + 8 * 7 * 24 * 60 * 60 * 1000);
+      await this.prisma.routineProposal.updateMany({
+        where: { routineId: proposal.routineId },
+        data: { autoBlockedUntil: blockUntil },
+      });
+    }
+
+    return { reverted: true };
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────

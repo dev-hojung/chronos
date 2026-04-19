@@ -5,7 +5,14 @@ import { Screen } from '../../components/Screen';
 import { Heading } from '../../components/Heading';
 import { Text } from '../../components/Text';
 import { RoutineCard } from '../../components/RoutineCard';
-import { useRoutines, useDeleteRoutine, useUpcoming } from '../../lib/queries/routine';
+import { Card } from '../../components/Card';
+import {
+  useRoutines,
+  useDeleteRoutine,
+  useUpcoming,
+  useProposals,
+  useAnalyzeRoutines,
+} from '../../lib/queries/routine';
 import { scheduleRoutineNotifications } from '../../lib/notifications/routines';
 import type { UpcomingRoutine } from '../../lib/api/routine';
 
@@ -13,7 +20,9 @@ export default function RoutinesScreen() {
   const router = useRouter();
   const { data: routines = [] } = useRoutines();
   const { data: upcoming = [] } = useUpcoming();
+  const { data: proposals = [] } = useProposals();
   const deleteRoutine = useDeleteRoutine();
+  const analyzeRoutines = useAnalyzeRoutines();
   const scheduleDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Reschedule notifications when routines or upcoming changes
@@ -34,19 +43,49 @@ export default function RoutinesScreen() {
     upcoming.map((u) => [u.routineId, u]),
   );
 
+  // Count proposals applied in last 7 days
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const recentlyApplied = proposals.filter(
+    (p) => p.appliedAt != null && new Date(p.appliedAt) >= sevenDaysAgo,
+  );
+
   return (
     <Screen>
       <View className="flex-row items-center justify-between mb-2">
         <Heading level={1}>루틴</Heading>
-        <TouchableOpacity
-          onPress={() => router.push('/routines/new')}
-          className="bg-primary-500 rounded-full px-3 py-1"
-        >
-          <Text size="sm" className="text-white font-semibold">
-            +
-          </Text>
-        </TouchableOpacity>
+        <View className="flex-row gap-2">
+          <TouchableOpacity
+            onPress={() => analyzeRoutines.mutate()}
+            disabled={analyzeRoutines.isPending}
+            className="bg-secondary-500 rounded-full px-3 py-1"
+          >
+            <Text size="sm" className="text-white font-semibold">
+              {analyzeRoutines.isPending ? '분석중...' : '분석'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.push('/routines/new')}
+            className="bg-primary-500 rounded-full px-3 py-1"
+          >
+            <Text size="sm" className="text-white font-semibold">
+              +
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {recentlyApplied.length > 0 && (
+        <TouchableOpacity onPress={() => router.push('/routines/proposals')}>
+          <Card tone="accent" className="mb-3">
+            <Text size="sm" className="font-semibold">
+              AI 조정 반영됨 — 최근 7일 {recentlyApplied.length}건
+            </Text>
+            <Text size="xs" tone="muted">
+              탭하여 자세히 보기
+            </Text>
+          </Card>
+        </TouchableOpacity>
+      )}
 
       {routines.length === 0 && (
         <Text tone="muted" size="sm">

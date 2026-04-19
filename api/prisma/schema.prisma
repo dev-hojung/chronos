@@ -201,17 +201,19 @@ model RoutineRun {
 }
 
 model RoutineProposal {
-  id              String    @id @default(uuid())
-  routineId       String    @map("routine_id")
-  proposedChange  Json      @map("proposed_change")
-  confidence      Float
-  appliedAt       DateTime? @map("applied_at")
-  revertedAt      DateTime? @map("reverted_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
+  id                String    @id @default(cuid())
+  routineId         String    @map("routine_id")
+  proposedChange    Json      @map("proposed_change")
+  diagnosis         String    @default("")
+  confidence        Float
+  appliedAt         DateTime? @map("applied_at")
+  revertedAt        DateTime? @map("reverted_at")
+  autoBlockedUntil  DateTime? @map("auto_blocked_until")
+  createdAt         DateTime  @default(now()) @map("created_at")
 
-  routine         Routine   @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  routine           Routine   @relation(fields: [routineId], references: [id], onDelete: Cascade)
 
-  @@index([routineId, createdAt])
+  @@index([routineId])
   @@map("routine_proposals")
 }
 

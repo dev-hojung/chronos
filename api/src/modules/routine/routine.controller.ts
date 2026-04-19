@@ -66,4 +66,21 @@ export class RoutineController {
   deleteRoutine(@Param('id') id: string, @CurrentUser() user: JwtPrincipal) {
     return this.routineService.deleteRoutine(user.userId, id);
   }
+
+  // ── Proposals ─────────────────────────────────────────────────────────────
+
+  @Post('analyze')
+  analyzeRoutines(@CurrentUser() user: JwtPrincipal) {
+    return this.routineService.analyzeAndProposeForUser(user.userId);
+  }
+
+  @Get('proposals')
+  listProposals(@CurrentUser() user: JwtPrincipal) {
+    return this.routineService.listProposals(user.userId);
+  }
+
+  @Post('proposals/:id/revert')
+  revertProposal(@Param('id') id: string, @CurrentUser() user: JwtPrincipal) {
+    return this.routineService.revertProposal(user.userId, id);
+  }
 }

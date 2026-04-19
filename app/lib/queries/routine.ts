@@ -100,3 +100,39 @@ export function useRecordRun() {
     },
   });
 }
+
+// ── Proposals ─────────────────────────────────────────────────────────────────
+
+export const proposalKeys = {
+  all: () => ['routineProposals'] as const,
+};
+
+export function useProposals() {
+  return useQuery({
+    queryKey: proposalKeys.all(),
+    queryFn: routineApi.listProposals,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useAnalyzeRoutines() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: routineApi.analyzeRoutines,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: proposalKeys.all() });
+      qc.invalidateQueries({ queryKey: routineKeys.all() });
+    },
+  });
+}
+
+export function useRevertProposal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => routineApi.revertProposal(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: proposalKeys.all() });
+      qc.invalidateQueries({ queryKey: routineKeys.all() });
+    },
+  });
+}
