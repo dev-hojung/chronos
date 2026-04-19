@@ -1,0 +1,278 @@
+// Chronos Prisma schema — W1
+// Target: PostgreSQL (Supabase 관리형 가정)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // directUrl = env("DIRECT_URL")  // uncomment after upgrading Prisma for Supabase pgBouncer migrations
+}
+
+// ---------------- Enums ----------------
+
+enum SubscriptionTier {
+  FREE
+  PRO
+}
+
+enum Chronotype {
+  LARK
+  OWL
+  NEUTRAL
+}
+
+enum InboxSource {
+  TEXT
+  VOICE
+  SHARE
+  IMPORT
+}
+
+enum ContextLabel {
+  WORK
+  PERSONAL
+  RESEARCH
+  ADMIN
+}
+
+enum Priority {
+  NOW
+  TODAY
+  THIS_WEEK
+  SOMEDAY
+}
+
+enum StackActionStatus {
+  PENDING
+  DONE
+  DISMISSED
+}
+
+enum RoutineRunStatus {
+  DONE
+  SKIPPED
+  SNOOZED
+  MISSED
+}
+
+enum GoalWeight {
+  LOW
+  MED
+  HIGH
+}
+
+enum GoalStatus {
+  ACTIVE
+  ACHIEVED
+  ARCHIVED
+}
+
+enum GoalMetricType {
+  COUNT
+  DURATION_MIN
+  NUMERIC
+  BOOLEAN
+}
+
+enum ContributionSourceType {
+  ROUTINE
+  STACK_ACTION
+  MANUAL
+}
+
+// ---------------- Models ----------------
+
+model User {
+  id                String           @id @default(uuid())
+  email             String?          @unique
+  appleSub          String?          @unique @map("apple_sub")
+  googleSub         String?          @unique @map("google_sub")
+  subscriptionTier  SubscriptionTier @default(FREE) @map("subscription_tier")
+  chronotype        Chronotype       @default(NEUTRAL)
+  timezone          String           @default("Asia/Seoul")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  inboxItems        InboxItem[]
+  stacks            Stack[]
+  routines          Routine[]
+  goals             Goal[]
+  auditLogs         AuditLog[]
+  dailyPlans        DailyPlan[]
+
+  @@map("users")
+}
+
+model InboxItem {
+  id                String      @id @default(uuid())
+  userId            String      @map("user_id")
+  rawText           String      @map("raw_text")
+  source            InboxSource @default(TEXT)
+  processedStackId  String?     @map("processed_stack_id")
+  createdAt         DateTime    @default(now()) @map("created_at")
+
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  processedStack    Stack?      @relation("ProcessedInbox", fields: [processedStackId], references: [id])
+  stackItem         StackItem?
+
+  @@index([userId, createdAt])
+  @@map("inbox_items")
+}
+
+model Stack {
+  id             String             @id @default(uuid())
+  userId         String             @map("user_id")
+  title          String
+  contextLabel   ContextLabel       @map("context_label")
+  summary        String?
+  aiGenerated    Boolean            @default(false) @map("ai_generated")
+  createdAt      DateTime           @default(now()) @map("created_at")
+
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items          StackItem[]
+  nextActions    StackNextAction[]
+  processedInbox InboxItem[]        @relation("ProcessedInbox")
+
+  @@index([userId, createdAt])
+  @@map("stacks")
+}
+
+model StackItem {
+  stackId      String    @map("stack_id")
+  inboxItemId  String    @unique @map("inbox_item_id")
+  orderIdx     Int       @map("order_idx")
+
+  stack        Stack     @relation(fields: [stackId], references: [id], onDelete: Cascade)
+  inboxItem    InboxItem @relation(fields: [inboxItemId], references: [id], onDelete: Cascade)
+
+  @@id([stackId, inboxItemId])
+  @@map("stack_items")
+}
+
+model StackNextAction {
+  id         String            @id @default(uuid())
+  stackId    String            @map("stack_id")
+  actionText String            @map("action_text")
+  priority   Priority          @default(TODAY)
+  status     StackActionStatus @default(PENDING)
+  createdAt  DateTime          @default(now()) @map("created_at")
+
+  stack      Stack             @relation(fields: [stackId], references: [id], onDelete: Cascade)
+
+  @@index([stackId, status])
+  @@map("stack_next_actions")
+}
+
+model Routine {
+  id           String             @id @default(uuid())
+  userId       String             @map("user_id")
+  title        String
+  scheduleCron String             @map("schedule_cron")
+  durationMin  Int                @map("duration_min")
+  active       Boolean            @default(true)
+  version      Int                @default(1)
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runs         RoutineRun[]
+  proposals    RoutineProposal[]
+
+  @@index([userId, active])
+  @@map("routines")
+}
+
+model RoutineRun {
+  id                String            @id @default(uuid())
+  routineId         String            @map("routine_id")
+  scheduledAt       DateTime          @map("scheduled_at")
+  status            RoutineRunStatus
+  actualDurationMin Int?              @map("actual_duration_min")
+  completedAt       DateTime?         @map("completed_at")
+
+  routine           Routine           @relation(fields: [routineId], references: [id], onDelete: Cascade)
+
+  @@index([routineId, scheduledAt])
+  @@map("routine_runs")
+}
+
+model RoutineProposal {
+  id              String    @id @default(uuid())
+  routineId       String    @map("routine_id")
+  proposedChange  Json      @map("proposed_change")
+  confidence      Float
+  appliedAt       DateTime? @map("applied_at")
+  revertedAt      DateTime? @map("reverted_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  routine         Routine   @relation(fields: [routineId], references: [id], onDelete: Cascade)
+
+  @@index([routineId, createdAt])
+  @@map("routine_proposals")
+}
+
+model Goal {
+  id            String               @id @default(uuid())
+  userId        String               @map("user_id")
+  title         String
+  horizonDays   Int                  @map("horizon_days")
+  weight        GoalWeight           @default(MED)
+  metricType    GoalMetricType       @map("metric_type")
+  targetValue   Float                @map("target_value")
+  currentValue  Float                @default(0) @map("current_value")
+  status        GoalStatus           @default(ACTIVE)
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contributions GoalContribution[]
+
+  @@index([userId, status])
+  @@map("goals")
+}
+
+model GoalContribution {
+  id          String                 @id @default(uuid())
+  goalId      String                 @map("goal_id")
+  sourceType  ContributionSourceType @map("source_type")
+  sourceId    String                 @map("source_id")
+  deltaValue  Float                  @map("delta_value")
+  loggedAt    DateTime               @default(now()) @map("logged_at")
+
+  goal        Goal                   @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([goalId, loggedAt])
+  @@map("goal_contributions")
+}
+
+model AuditLog {
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  actionType     String    @map("action_type")
+  payload        Json
+  undoableUntil  DateTime? @map("undoable_until")
+  revertedAt     DateTime? @map("reverted_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
+
+model DailyPlan {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  planDate          DateTime @map("plan_date") @db.Date
+  orderedItemIds    Json     @map("ordered_item_ids")
+  gravitySnapshot   Json     @map("gravity_snapshot")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, planDate])
+  @@map("daily_plans")
+}
