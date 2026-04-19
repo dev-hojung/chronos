@@ -113,3 +113,25 @@ export function useRemoveStackItem() {
     },
   });
 }
+
+export function useAutoBundleInbox() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: stackApi.autoBundleInbox,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: stackKeys.inbox() });
+      qc.invalidateQueries({ queryKey: stackKeys.stacks() });
+    },
+  });
+}
+
+export function useUpdateInboxItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, dto }: { id: string; dto: { suggestedLabel?: stackApi.ContextLabel } }) =>
+      stackApi.updateInboxItem(id, dto),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: stackKeys.inbox() });
+    },
+  });
+}

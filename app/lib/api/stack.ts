@@ -8,8 +8,16 @@ export interface InboxItem {
   userId: string;
   rawText: string;
   source: InboxSource;
+  suggestedLabel: ContextLabel | null;
   processedStackId: string | null;
   createdAt: string;
+}
+
+export interface AutoBundleResult {
+  stacksCreated: number;
+  itemsBundled: number;
+  stackIds: string[];
+  auditId?: string;
 }
 
 export interface Stack {
@@ -85,4 +93,12 @@ export function removeStackItem(stackId: string, itemId: string) {
 
 export function deleteStack(id: string) {
   return apiFetch<{ deleted: boolean }>(`/stacks/${id}`, { method: 'DELETE' });
+}
+
+export function autoBundleInbox() {
+  return apiFetch<AutoBundleResult>('/inbox/auto-bundle', { method: 'POST' });
+}
+
+export function updateInboxItem(id: string, dto: { suggestedLabel?: ContextLabel }) {
+  return apiFetch<InboxItem>(`/inbox/${id}`, { method: 'PATCH', body: dto });
 }

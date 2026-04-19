@@ -181,6 +181,20 @@ export class AuditService {
         }
         break;
       }
+      case 'stack.autoBundle': {
+        const { stackIds, itemIds } = payload as { stackIds: string[]; itemIds: string[] };
+        if (stackIds?.length) {
+          await this.prisma.stackItem.deleteMany({ where: { stackId: { in: stackIds } } });
+          if (itemIds?.length) {
+            await this.prisma.inboxItem.updateMany({
+              where: { id: { in: itemIds } },
+              data: { processedStackId: null },
+            });
+          }
+          await this.prisma.stack.deleteMany({ where: { id: { in: stackIds } } });
+        }
+        break;
+      }
       default:
         this.logger.warn(`Unknown actionType for undo: ${actionType}`);
     }

@@ -8,6 +8,8 @@ import { AuditService } from '../audit/audit.service';
 import { CreateInboxItemDto } from './dto/create-inbox-item.dto';
 import { ListInboxDto } from './dto/list-inbox.dto';
 import { CreateStackDto } from './dto/create-stack.dto';
+import { UpdateInboxItemDto } from './dto/update-inbox-item.dto';
+import { classifyText } from './classifier';
 
 @Injectable()
 export class StackService {
@@ -19,11 +21,83 @@ export class StackService {
   // ── Inbox ──────────────────────────────────────────────────────────────
 
   async createInboxItem(userId: string, dto: CreateInboxItemDto) {
+    const classified = classifyText(dto.rawText);
     const item = await this.prisma.inboxItem.create({
-      data: { userId, rawText: dto.rawText, source: dto.source },
+      data: { userId, rawText: dto.rawText, source: dto.source, suggestedLabel: classified.label },
     });
     await this.auditService.record(userId, 'inbox.create', { itemId: item.id });
     return item;
+  }
+
+  async updateInboxItem(userId: string, id: string, dto: UpdateInboxItemDto) {
+    const item = await this.prisma.inboxItem.findUnique({ where: { id } });
+    if (!item) throw new NotFoundException('InboxItem not found');
+    if (item.userId !== userId) throw new ForbiddenException();
+    return this.prisma.inboxItem.update({
+      where: { id },
+      data: { suggestedLabel: dto.suggestedLabel },
+    });
+  }
+
+  async autoBundleInbox(userId: string): Promise<{ stacksCreated: number; itemsBundled: number; stackIds: string[] }> {
+    // 1. Fetch unprocessed inbox items
+    const items = await this.prisma.inboxItem.findMany({
+      where: { userId, processedStackId: null },
+    });
+
+    // 2. Group by suggestedLabel (fallback: classify now)
+    const groups = new Map<string, typeof items>();
+    for (const item of items) {
+      const label = item.suggestedLabel ?? classifyText(item.rawText).label;
+      const key = label as string;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(item);
+    }
+
+    const stackIds: string[] = [];
+    let itemsBundled = 0;
+
+    // 3. Create stacks for groups with >= 3 items
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const day = now.getDate();
+
+    for (const [label, groupItems] of groups.entries()) {
+      if (groupItems.length < 3) continue;
+
+      const stack = await this.prisma.stack.create({
+        data: {
+          userId,
+          title: `${label} · ${month}월 ${day}일`,
+          contextLabel: label as import('@prisma/client').ContextLabel,
+          aiGenerated: false,
+        },
+      });
+      stackIds.push(stack.id);
+
+      // 4. Connect items as StackItems and update processedStackId
+      await this.prisma.stackItem.createMany({
+        data: groupItems.map((item, idx) => ({
+          stackId: stack.id,
+          inboxItemId: item.id,
+          orderIdx: idx,
+        })),
+        skipDuplicates: true,
+      });
+      await this.prisma.inboxItem.updateMany({
+        where: { id: { in: groupItems.map((i) => i.id) } },
+        data: { processedStackId: stack.id },
+      });
+      itemsBundled += groupItems.length;
+    }
+
+    // 5. Record audit
+    await this.auditService.record(userId, 'stack.autoBundle', {
+      stackIds,
+      itemIds: items.filter((i) => stackIds.length > 0).map((i) => i.id),
+    });
+
+    return { stacksCreated: stackIds.length, itemsBundled, stackIds };
   }
 
   async listInbox(userId: string, query: ListInboxDto) {

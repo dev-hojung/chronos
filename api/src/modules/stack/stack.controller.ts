@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -15,6 +16,7 @@ import { StackService } from './stack.service';
 import { CreateInboxItemDto } from './dto/create-inbox-item.dto';
 import { ListInboxDto } from './dto/list-inbox.dto';
 import { CreateStackDto } from './dto/create-stack.dto';
+import { UpdateInboxItemDto } from './dto/update-inbox-item.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller()
@@ -36,6 +38,20 @@ export class StackController {
   @Delete('inbox/:id')
   deleteInboxItem(@Param('id') id: string, @CurrentUser() user: JwtPrincipal) {
     return this.stackService.deleteInboxItem(user.userId, id);
+  }
+
+  @Patch('inbox/:id')
+  updateInboxItem(
+    @Param('id') id: string,
+    @Body() dto: UpdateInboxItemDto,
+    @CurrentUser() user: JwtPrincipal,
+  ) {
+    return this.stackService.updateInboxItem(user.userId, id, dto);
+  }
+
+  @Post('inbox/auto-bundle')
+  autoBundleInbox(@CurrentUser() user: JwtPrincipal) {
+    return this.stackService.autoBundleInbox(user.userId);
   }
 
   // ── Stacks ─────────────────────────────────────────────────────────────

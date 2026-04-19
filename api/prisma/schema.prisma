@@ -107,12 +107,13 @@ model User {
 }
 
 model InboxItem {
-  id                String      @id @default(uuid())
-  userId            String      @map("user_id")
-  rawText           String      @map("raw_text")
-  source            InboxSource @default(TEXT)
-  processedStackId  String?     @map("processed_stack_id")
-  createdAt         DateTime    @default(now()) @map("created_at")
+  id                String        @id @default(uuid())
+  userId            String        @map("user_id")
+  rawText           String        @map("raw_text")
+  source            InboxSource   @default(TEXT)
+  suggestedLabel    ContextLabel? @map("suggested_label")
+  processedStackId  String?       @map("processed_stack_id")
+  createdAt         DateTime      @default(now()) @map("created_at")
 
   user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   processedStack    Stack?      @relation("ProcessedInbox", fields: [processedStackId], references: [id])
