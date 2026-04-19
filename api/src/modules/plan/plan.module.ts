@@ -8,6 +8,7 @@ import { PlanEveningTask } from './plan-evening.task';
 import { AuditModule } from '../audit/audit.module';
 import { GoalModule } from '../goal/goal.module';
 import { RoutineModule } from '../routine/routine.module';
+import { EntitlementsModule } from '../entitlements/entitlements.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { RoutineModule } from '../routine/routine.module';
     AuditModule,
     GoalModule,
     RoutineModule,
+    EntitlementsModule,
   ],
   controllers: [PlanController],
   providers: [PlanService, PlanDailyTask, PlanEveningTask],

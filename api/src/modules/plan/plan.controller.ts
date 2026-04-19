@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { JwtPrincipal } from '../auth/jwt.strategy';
 import { PlanService } from './plan.service';
+import { EntitlementsService } from '../entitlements/entitlements.service';
 
 interface ReorderBody {
   date: string;           // ISO date string YYYY-MM-DD
@@ -26,15 +27,20 @@ interface PushTokenBody {
 @Controller('plan')
 @UseGuards(JwtAuthGuard)
 export class PlanController {
-  constructor(private readonly planService: PlanService) {}
+  constructor(
+    private readonly planService: PlanService,
+    private readonly entitlementsService: EntitlementsService,
+  ) {}
 
-  /** POST /plan/generate — 즉시 재생성 */
+  /** POST /plan/generate — 즉시 재생성 (핵심기능 게이트) */
   @Post('generate')
   @HttpCode(HttpStatus.OK)
   async generate(
     @CurrentUser() principal: JwtPrincipal,
     @Query('date') dateStr?: string,
   ) {
+    // 핵심기능 게이트: PRO 또는 유효 ad_token 필요
+    this.entitlementsService.requireEntitlement(principal.userId, principal.tier, 'plan.generate');
     const date = dateStr ? this._parseDate(dateStr) : undefined;
     return this.planService.generateTodayPlan(principal.userId, date);
   }

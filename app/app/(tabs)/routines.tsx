@@ -6,6 +6,8 @@ import { Heading } from '../../components/Heading';
 import { Text } from '../../components/Text';
 import { RoutineCard } from '../../components/RoutineCard';
 import { Card } from '../../components/Card';
+import { EntitlementGate } from '../../components/EntitlementGate';
+import { AppBanner } from '../../lib/ads/banner';
 import {
   useRoutines,
   useDeleteRoutine,
@@ -54,15 +56,15 @@ export default function RoutinesScreen() {
       <View className="flex-row items-center justify-between mb-2">
         <Heading level={1}>루틴</Heading>
         <View className="flex-row gap-2">
-          <TouchableOpacity
-            onPress={() => analyzeRoutines.mutate()}
-            disabled={analyzeRoutines.isPending}
+          <EntitlementGate
+            feature="routine.analyze"
+            onGranted={() => analyzeRoutines.mutate()}
             className="bg-secondary-500 rounded-full px-3 py-1"
           >
             <Text size="sm" className="text-white font-semibold">
               {analyzeRoutines.isPending ? '분석중...' : '분석'}
             </Text>
-          </TouchableOpacity>
+          </EntitlementGate>
           <TouchableOpacity
             onPress={() => router.push('/routines/new')}
             className="bg-primary-500 rounded-full px-3 py-1"
@@ -124,6 +126,7 @@ export default function RoutinesScreen() {
           ) : null
         }
       />
+      <AppBanner placement="routines_bottom" />
     </Screen>
   );
 }

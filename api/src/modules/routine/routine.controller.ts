@@ -17,11 +17,15 @@ import { CreateRoutineDto } from './dto/create-routine.dto';
 import { UpdateRoutineDto } from './dto/update-routine.dto';
 import { CompleteRunDto } from './dto/complete-run.dto';
 import { ListRunsDto } from './dto/list-runs.dto';
+import { EntitlementsService } from '../entitlements/entitlements.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('routines')
 export class RoutineController {
-  constructor(private readonly routineService: RoutineService) {}
+  constructor(
+    private readonly routineService: RoutineService,
+    private readonly entitlementsService: EntitlementsService,
+  ) {}
 
   @Post()
   createRoutine(@Body() dto: CreateRoutineDto, @CurrentUser() user: JwtPrincipal) {
@@ -71,6 +75,8 @@ export class RoutineController {
 
   @Post('analyze')
   analyzeRoutines(@CurrentUser() user: JwtPrincipal) {
+    // 핵심기능 게이트: PRO 또는 유효 ad_token 필요
+    this.entitlementsService.requireEntitlement(user.userId, user.tier, 'routine.analyze');
     return this.routineService.analyzeAndProposeForUser(user.userId);
   }
 

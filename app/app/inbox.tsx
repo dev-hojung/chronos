@@ -4,6 +4,7 @@ import { Screen } from '../components/Screen';
 import { Heading } from '../components/Heading';
 import { Text } from '../components/Text';
 import { InboxItemRow } from '../components/InboxItemRow';
+import { EntitlementGate } from '../components/EntitlementGate';
 import { useInbox, useDeleteInboxItem, useAutoBundleInbox, useUpdateInboxItem } from '../lib/queries/stack';
 import type { ContextLabel } from '../lib/api/stack';
 
@@ -36,15 +37,15 @@ export default function InboxScreen() {
     <Screen>
       <View className="flex-row items-center justify-between mb-2">
         <Heading level={1}>Inbox</Heading>
-        <TouchableOpacity
-          onPress={handleAutoBundle}
-          disabled={autoBundleMutation.isPending}
+        <EntitlementGate
+          feature="stack.autoBundle"
+          onGranted={handleAutoBundle}
           className="px-3 py-1.5 bg-indigo-600 rounded-lg"
         >
           <Text size="sm" className="text-white">
             {autoBundleMutation.isPending ? '처리 중...' : '자동 묶기'}
           </Text>
-        </TouchableOpacity>
+        </EntitlementGate>
       </View>
 
       {toastMessage && (

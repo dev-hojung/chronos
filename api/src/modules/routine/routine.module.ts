@@ -5,9 +5,10 @@ import { RoutineService } from './routine.service';
 import { RoutineWeeklyTask } from './routine-weekly.task';
 import { AuditModule } from '../audit/audit.module';
 import { GoalModule } from '../goal/goal.module';
+import { EntitlementsModule } from '../entitlements/entitlements.module';
 
 @Module({
-  imports: [ScheduleModule.forRoot(), AuditModule, GoalModule],
+  imports: [ScheduleModule.forRoot(), AuditModule, GoalModule, EntitlementsModule],
   controllers: [RoutineController],
   providers: [RoutineService, RoutineWeeklyTask],
   exports: [RoutineService],

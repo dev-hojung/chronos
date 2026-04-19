@@ -109,6 +109,7 @@ model User {
   goals             Goal[]
   auditLogs         AuditLog[]
   dailyPlans        DailyPlan[]
+  adTokens          AdToken[]
 
   @@map("users")
 }
@@ -294,4 +295,19 @@ model DailyPlan {
 
   @@unique([userId, planDate])
   @@map("daily_plans")
+}
+
+// AdToken: 광고 시청 후 발급되는 24h 이용권 (DATABASE_URL 있는 환경에서 영구 저장)
+model AdToken {
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feature       String
+  transactionId String    @unique @map("transaction_id")
+  grantedAt     DateTime  @default(now()) @map("granted_at")
+  expiresAt     DateTime  @map("expires_at")
+  consumedAt    DateTime? @map("consumed_at")
+
+  @@index([userId, expiresAt])
+  @@map("ad_tokens")
 }

@@ -17,11 +17,15 @@ import { CreateInboxItemDto } from './dto/create-inbox-item.dto';
 import { ListInboxDto } from './dto/list-inbox.dto';
 import { CreateStackDto } from './dto/create-stack.dto';
 import { UpdateInboxItemDto } from './dto/update-inbox-item.dto';
+import { EntitlementsService } from '../entitlements/entitlements.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class StackController {
-  constructor(private readonly stackService: StackService) {}
+  constructor(
+    private readonly stackService: StackService,
+    private readonly entitlementsService: EntitlementsService,
+  ) {}
 
   // ── Inbox ──────────────────────────────────────────────────────────────
 
@@ -51,6 +55,8 @@ export class StackController {
 
   @Post('inbox/auto-bundle')
   autoBundleInbox(@CurrentUser() user: JwtPrincipal) {
+    // 핵심기능 게이트: PRO 또는 유효 ad_token 필요
+    this.entitlementsService.requireEntitlement(user.userId, user.tier, 'stack.autoBundle');
     return this.stackService.autoBundleInbox(user.userId);
   }
 

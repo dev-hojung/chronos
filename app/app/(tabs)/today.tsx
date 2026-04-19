@@ -7,6 +7,8 @@ import { Text } from '../../components/Text';
 import { Card } from '../../components/Card';
 import { InboxQuickEntry } from '../../components/InboxQuickEntry';
 import { ContextBadge } from '../../components/ContextBadge';
+import { EntitlementGate } from '../../components/EntitlementGate';
+import { AppBanner } from '../../lib/ads/banner';
 import { useInbox, useStacks } from '../../lib/queries/stack';
 import { useRecordRun } from '../../lib/queries/routine';
 import { useTodayPlan, useGenerateTodayPlan, useReorderPlan, useUnlockPlan } from '../../lib/queries/plan';
@@ -230,14 +232,15 @@ export default function TodayScreen() {
               </TouchableOpacity>
             )}
             {!plan?.locked && (
-              <TouchableOpacity
-                onPress={() => generatePlan.mutate(date)}
+              <EntitlementGate
+                feature="plan.generate"
+                onGranted={() => generatePlan.mutate(date)}
                 className="bg-primary-100 dark:bg-primary-900 rounded px-2 py-1"
               >
                 <Text size="xs" tone="primary">
                   {generatePlan.isPending ? '정렬 중...' : '지금 다시 정렬'}
                 </Text>
-              </TouchableOpacity>
+              </EntitlementGate>
             )}
           </View>
         </View>
@@ -252,6 +255,7 @@ export default function TodayScreen() {
       </Card>
 
       <InboxQuickEntry />
+      <AppBanner placement="today_bottom" />
     </Screen>
   );
 }
