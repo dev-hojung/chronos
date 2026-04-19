@@ -1,9 +1,19 @@
+import { TouchableOpacity, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Screen } from '../../components/Screen';
 import { Heading } from '../../components/Heading';
 import { Text } from '../../components/Text';
 import { Card } from '../../components/Card';
+import { InboxQuickEntry } from '../../components/InboxQuickEntry';
+import { useInbox, useStacks } from '../../lib/queries/stack';
 
 export default function TodayScreen() {
+  const router = useRouter();
+  const { data: inboxData } = useInbox();
+  const { data: stacks } = useStacks();
+  const inboxCount = inboxData?.items?.length ?? 0;
+  const stackCount = stacks?.length ?? 0;
+
   const today = new Date().toLocaleDateString('ko-KR', {
     year: 'numeric',
     month: '2-digit',
@@ -13,7 +23,23 @@ export default function TodayScreen() {
 
   return (
     <Screen>
-      <Heading level={1}>오늘</Heading>
+      <View className="flex-row items-center justify-between mb-1">
+        <Heading level={1}>오늘</Heading>
+        <TouchableOpacity
+          onPress={() => router.push('/inbox')}
+          className="flex-row gap-2"
+        >
+          <View className="bg-blue-100 dark:bg-blue-900 rounded-full px-2 py-0.5">
+            <Text size="xs" className="font-medium">Inbox {inboxCount}</Text>
+          </View>
+          <View className="bg-gray-100 dark:bg-gray-700 rounded-full px-2 py-0.5 ml-1">
+            <Text size="xs" className="font-medium" onPress={() => router.push('/stacks')}>
+              Stacks {stackCount}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+
       <Text tone="muted" size="sm">
         {today}
       </Text>
@@ -33,6 +59,8 @@ export default function TodayScreen() {
         <Text size="sm">• 스트레칭 7:30 (AI 조정)</Text>
         <Text size="sm">○ 저녁 샐러드 기록</Text>
       </Card>
+
+      <InboxQuickEntry />
     </Screen>
   );
 }
