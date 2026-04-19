@@ -18,6 +18,11 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
 import type { JwtPrincipal } from './jwt.strategy';
 
+interface PushTokenDto {
+  token: string;
+  notificationPrefs?: Record<string, boolean>;
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -57,5 +62,21 @@ export class AuthController {
     const user = await this.authService.getUserById(principal.userId);
     if (!user) throw new NotFoundException('User not found');
     return { user };
+  }
+
+  /** POST /auth/push-token — Expo push token 등록 */
+  @Post('push-token')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async registerPushToken(
+    @CurrentUser() principal: JwtPrincipal,
+    @Body() dto: PushTokenDto,
+  ) {
+    await this.authService.updatePushToken(
+      principal.userId,
+      dto.token,
+      dto.notificationPrefs,
+    );
+    return { ok: true };
   }
 }

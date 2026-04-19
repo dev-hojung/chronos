@@ -330,6 +330,32 @@ export class AuditService {
         }
         break;
       }
+      case 'plan.generate': {
+        // undo: 이전 ordered_item_ids 복원
+        const { planDate, prevOrderedItemIds } = payload as {
+          planDate: string;
+          prevOrderedItemIds: string[];
+        };
+        const date = new Date(planDate);
+        await this.prisma.dailyPlan.updateMany({
+          where: { userId, planDate: date },
+          data: { orderedItemIds: prevOrderedItemIds },
+        });
+        break;
+      }
+      case 'plan.manualReorder': {
+        // undo: 이전 순서 복원 + locked 해제
+        const { planDate, prevOrderedItemIds } = payload as {
+          planDate: string;
+          prevOrderedItemIds: string[];
+        };
+        const date = new Date(planDate);
+        await this.prisma.dailyPlan.updateMany({
+          where: { userId, planDate: date },
+          data: { orderedItemIds: prevOrderedItemIds, locked: false },
+        });
+        break;
+      }
       default:
         this.logger.warn(`Unknown actionType for undo: ${actionType}`);
     }

@@ -224,6 +224,22 @@ export class AuthService {
     return user ? this.toAuthUser(user) : null;
   }
 
+  /** Expo push token 등록 및 notification prefs 업데이트 */
+  async updatePushToken(
+    userId: string,
+    token: string,
+    notificationPrefs?: Record<string, boolean>,
+  ): Promise<void> {
+    const data: Record<string, unknown> = { expoPushToken: token };
+    if (notificationPrefs !== undefined) {
+      data['notificationPrefs'] = notificationPrefs;
+    }
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: data as Parameters<typeof this.prisma.user.update>[0]['data'],
+    });
+  }
+
   private toAuthUser(user: {
     id: string;
     email: string | null;

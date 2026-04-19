@@ -98,6 +98,8 @@ model User {
   subscriptionTier  SubscriptionTier @default(FREE) @map("subscription_tier")
   chronotype        Chronotype       @default(NEUTRAL)
   timezone          String           @default("Asia/Seoul")
+  expoPushToken     String?          @map("expo_push_token")
+  notificationPrefs Json?            @map("notification_prefs")
   createdAt         DateTime         @default(now()) @map("created_at")
   updatedAt         DateTime         @updatedAt @map("updated_at")
 
@@ -284,7 +286,9 @@ model DailyPlan {
   planDate          DateTime @map("plan_date") @db.Date
   orderedItemIds    Json     @map("ordered_item_ids")
   gravitySnapshot   Json     @map("gravity_snapshot")
+  locked            Boolean  @default(false)
   createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
