@@ -13,6 +13,7 @@ import { ListRunsDto } from './dto/list-runs.dto';
 import { RoutineRunStatus } from '@prisma/client';
 import { analyzeRoutine } from './analyzer';
 import type { RunLike } from './analyzer';
+import { GoalService } from '../goal/goal.service';
 
 // Lightweight cron-next calculator — uses CronExpressionParser (cron-parser v3+)
 // Falls back to a simple daily guess if the package is unavailable.
@@ -86,6 +87,7 @@ export class RoutineService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly goalService: GoalService,
   ) {
     this.useMemory = !process.env.DATABASE_URL;
     if (this.useMemory) {
@@ -233,6 +235,10 @@ export class RoutineService {
         this.memRuns.set(id, run);
         await this.auditService.record(userId, 'routine.run', { runId: id });
       }
+      // 루틴 완료 시 연결된 goal에 자동 기여 추가
+      if (dto.status === 'done') {
+        await this.goalService.applyRoutineCompletion(userId, run.routineId);
+      }
       return run;
     }
 
@@ -240,7 +246,7 @@ export class RoutineService {
     const existing = await this.prisma.routineRun.findUnique({ where: { id: dto.routineRunId } });
     if (existing) {
       // Verify ownership via routine
-      await this._requireRoutine(userId, existing.routineId);
+      const routine = await this._requireRoutine(userId, existing.routineId);
       const prev = { status: existing.status, actualDurationMin: existing.actualDurationMin };
       const updated = await this.prisma.routineRun.update({
         where: { id: dto.routineRunId },
@@ -251,6 +257,10 @@ export class RoutineService {
         },
       });
       await this.auditService.record(userId, 'routine.run', { runId: dto.routineRunId, prev });
+      // 루틴 완료 시 연결된 goal에 자동 기여 추가
+      if (dto.status === 'done') {
+        await this.goalService.applyRoutineCompletion(userId, existing.routineId, routine.title);
+      }
       return updated;
     }
 

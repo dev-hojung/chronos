@@ -240,6 +240,96 @@ export class AuditService {
         }
         break;
       }
+      case 'goal.create': {
+        const { goalId } = payload as { goalId: string };
+        await this.prisma.goal.update({
+          where: { id: goalId },
+          data: { status: 'ARCHIVED', archivedAt: new Date() },
+        });
+        break;
+      }
+      case 'goal.update': {
+        const { goalId, prev } = payload as { goalId: string; prev: Record<string, unknown> };
+        const updateData: Record<string, unknown> = {};
+        const fields = [
+          'title', 'horizonDays', 'weight', 'metricType', 'targetValue',
+          'currentValue', 'unit', 'direction', 'status', 'linkedRoutineIds',
+        ];
+        for (const f of fields) {
+          if (prev[f] !== undefined) updateData[f] = prev[f];
+        }
+        if (Object.keys(updateData).length > 0) {
+          await this.prisma.goal.update({ where: { id: goalId }, data: updateData });
+        }
+        break;
+      }
+      case 'goal.archive': {
+        const { goalId, prev } = payload as {
+          goalId: string;
+          prev: { status: string; archivedAt: string | null };
+        };
+        await this.prisma.goal.update({
+          where: { id: goalId },
+          data: {
+            status: prev.status as import('@prisma/client').GoalStatus,
+            archivedAt: prev.archivedAt ? new Date(prev.archivedAt) : null,
+          },
+        });
+        break;
+      }
+      case 'goal.contribution': {
+        // undo: contribution 삭제 + currentValue 역산 (removeContribution 로직과 동일)
+        const { contributionId } = payload as { contributionId: string };
+        const contribution = await this.prisma.goalContribution.findUnique({
+          where: { id: contributionId },
+          include: { goal: true },
+        });
+        if (contribution) {
+          const reversedValue =
+            contribution.goal.direction === 'UP'
+              ? contribution.goal.currentValue - contribution.deltaValue
+              : contribution.goal.currentValue + contribution.deltaValue;
+          await this.prisma.$transaction([
+            this.prisma.goalContribution.delete({ where: { id: contributionId } }),
+            this.prisma.goal.update({
+              where: { id: contribution.goalId },
+              data: { currentValue: reversedValue },
+            }),
+          ]);
+        }
+        break;
+      }
+      case 'goal.contributionRemove': {
+        // undo: contribution 재추가 + currentValue 재산출
+        const { goalId, delta, contributionId } = payload as {
+          goalId: string;
+          delta: number;
+          contributionId: string;
+        };
+        const goal = await this.prisma.goal.findUnique({ where: { id: goalId } });
+        if (goal) {
+          const newValue =
+            goal.direction === 'UP'
+              ? goal.currentValue + delta
+              : goal.currentValue - delta;
+          await this.prisma.$transaction([
+            this.prisma.goalContribution.create({
+              data: {
+                id: contributionId,
+                goalId,
+                sourceType: 'MANUAL',
+                deltaValue: delta,
+                loggedAt: new Date(),
+              },
+            }),
+            this.prisma.goal.update({
+              where: { id: goalId },
+              data: { currentValue: newValue },
+            }),
+          ]);
+        }
+        break;
+      }
       default:
         this.logger.warn(`Unknown actionType for undo: ${actionType}`);
     }

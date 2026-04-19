@@ -66,8 +66,13 @@ enum GoalWeight {
 
 enum GoalStatus {
   ACTIVE
-  ACHIEVED
+  COMPLETED
   ARCHIVED
+}
+
+enum GoalDirection {
+  UP
+  DOWN
 }
 
 enum GoalMetricType {
@@ -218,17 +223,23 @@ model RoutineProposal {
 }
 
 model Goal {
-  id            String               @id @default(uuid())
-  userId        String               @map("user_id")
-  title         String
-  horizonDays   Int                  @map("horizon_days")
-  weight        GoalWeight           @default(MED)
-  metricType    GoalMetricType       @map("metric_type")
-  targetValue   Float                @map("target_value")
-  currentValue  Float                @default(0) @map("current_value")
-  status        GoalStatus           @default(ACTIVE)
-  createdAt     DateTime             @default(now()) @map("created_at")
-  updatedAt     DateTime             @updatedAt @map("updated_at")
+  id                        String               @id @default(uuid())
+  userId                    String               @map("user_id")
+  title                     String
+  horizonDays               Int                  @map("horizon_days")
+  weight                    GoalWeight           @default(MED)
+  metricType                GoalMetricType       @map("metric_type")
+  targetValue               Float                @map("target_value")
+  currentValue              Float                @default(0) @map("current_value")
+  unit                      String?
+  direction                 GoalDirection        @default(UP)
+  status                    GoalStatus           @default(ACTIVE)
+  completedAt               DateTime?            @map("completed_at")
+  archivedAt                DateTime?            @map("archived_at")
+  linkedRoutineIds          String[]             @map("linked_routine_ids")
+  linkedStackContextLabels  ContextLabel[]       @map("linked_stack_context_labels")
+  createdAt                 DateTime             @default(now()) @map("created_at")
+  updatedAt                 DateTime             @updatedAt @map("updated_at")
 
   user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   contributions GoalContribution[]
@@ -241,8 +252,9 @@ model GoalContribution {
   id          String                 @id @default(uuid())
   goalId      String                 @map("goal_id")
   sourceType  ContributionSourceType @map("source_type")
-  sourceId    String                 @map("source_id")
+  sourceId    String?                @map("source_id")
   deltaValue  Float                  @map("delta_value")
+  note        String?
   loggedAt    DateTime               @default(now()) @map("logged_at")
 
   goal        Goal                   @relation(fields: [goalId], references: [id], onDelete: Cascade)
