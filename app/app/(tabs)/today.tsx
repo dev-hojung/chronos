@@ -6,13 +6,28 @@ import { Text } from '../../components/Text';
 import { Card } from '../../components/Card';
 import { InboxQuickEntry } from '../../components/InboxQuickEntry';
 import { useInbox, useStacks } from '../../lib/queries/stack';
+import { useUpcoming, useRecordRun } from '../../lib/queries/routine';
+import type { RoutineRunStatus } from '../../lib/api/routine';
 
 export default function TodayScreen() {
   const router = useRouter();
   const { data: inboxData } = useInbox();
   const { data: stacks } = useStacks();
+  const { data: upcoming } = useUpcoming();
+  const recordRun = useRecordRun();
   const inboxCount = inboxData?.items?.length ?? 0;
   const stackCount = stacks?.length ?? 0;
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todaySlots = (upcoming ?? []).flatMap((r) =>
+    r.slots
+      .filter((s) => s.scheduledAt.slice(0, 10) === todayStr)
+      .map((s) => ({ ...s, routineId: r.routineId, title: r.title })),
+  );
+
+  const onRunAction = (runId: string, status: RoutineRunStatus) => {
+    recordRun.mutate({ routineRunId: runId, status });
+  };
 
   const today = new Date().toLocaleDateString('ko-KR', {
     year: 'numeric',
@@ -52,12 +67,36 @@ export default function TodayScreen() {
       </Card>
 
       <Card>
-        <Text size="base" className="font-semibold">
-          오늘의 우선 할일
-        </Text>
-        <Text size="sm">• 김 PM 피드백 반영  🎯 감량</Text>
-        <Text size="sm">• 스트레칭 7:30 (AI 조정)</Text>
-        <Text size="sm">○ 저녁 샐러드 기록</Text>
+        <Text size="base" className="font-semibold">오늘의 루틴</Text>
+        {todaySlots.length === 0 ? (
+          <Text size="sm" tone="muted">예정된 루틴이 없어요</Text>
+        ) : (
+          todaySlots.map((s) => {
+            const time = new Date(s.scheduledAt).toLocaleTimeString('ko-KR', {
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+            return (
+              <View
+                key={s.runId}
+                className="flex-row items-center justify-between py-1"
+              >
+                <Text size="sm">{time}  {s.title}</Text>
+                <View className="flex-row gap-2">
+                  <TouchableOpacity onPress={() => onRunAction(s.runId, 'done')}>
+                    <Text size="sm">✅</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => onRunAction(s.runId, 'skipped')}>
+                    <Text size="sm">⏸</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => onRunAction(s.runId, 'snoozed')}>
+                    <Text size="sm">💤</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })
+        )}
       </Card>
 
       <InboxQuickEntry />

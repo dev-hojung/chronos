@@ -85,6 +85,8 @@ export default function RootLayout() {
             <Stack.Screen name="inbox" options={{ presentation: 'modal', headerShown: true, title: 'Inbox' }} />
             <Stack.Screen name="stacks/index" options={{ presentation: 'modal', headerShown: true, title: '스택' }} />
             <Stack.Screen name="stacks/[id]" options={{ presentation: 'modal', headerShown: true, title: '스택 상세' }} />
+            <Stack.Screen name="routines/new" options={{ presentation: 'modal', headerShown: true, title: '새 루틴' }} />
+            <Stack.Screen name="routines/[id]" options={{ presentation: 'modal', headerShown: true, title: '루틴 상세' }} />
           </Stack>
         </ThemeProvider>
       </SafeAreaProvider>

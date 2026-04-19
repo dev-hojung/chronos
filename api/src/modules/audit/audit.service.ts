@@ -195,6 +195,51 @@ export class AuditService {
         }
         break;
       }
+      case 'routine.create': {
+        const { routineId } = payload as { routineId: string };
+        await this.prisma.routine.update({ where: { id: routineId }, data: { active: false } });
+        break;
+      }
+      case 'routine.update': {
+        const { routineId, prev } = payload as {
+          routineId: string;
+          prev: { title?: string; scheduleCron?: string; durationMin?: number; active?: boolean; version?: number };
+        };
+        await this.prisma.routine.update({
+          where: { id: routineId },
+          data: {
+            ...(prev.title !== undefined ? { title: prev.title } : {}),
+            ...(prev.scheduleCron !== undefined ? { scheduleCron: prev.scheduleCron } : {}),
+            ...(prev.durationMin !== undefined ? { durationMin: prev.durationMin } : {}),
+            ...(prev.active !== undefined ? { active: prev.active } : {}),
+            ...(prev.version !== undefined ? { version: prev.version } : {}),
+          },
+        });
+        break;
+      }
+      case 'routine.delete': {
+        const { routineId } = payload as { routineId: string };
+        await this.prisma.routine.update({ where: { id: routineId }, data: { active: true } });
+        break;
+      }
+      case 'routine.run': {
+        const { runId, prev } = payload as {
+          runId: string;
+          prev?: { status?: string; actualDurationMin?: number | null };
+        };
+        if (prev) {
+          await this.prisma.routineRun.update({
+            where: { id: runId },
+            data: {
+              ...(prev.status !== undefined ? { status: prev.status as import('@prisma/client').RoutineRunStatus } : {}),
+              ...(prev.actualDurationMin !== undefined ? { actualDurationMin: prev.actualDurationMin } : {}),
+            },
+          });
+        } else {
+          await this.prisma.routineRun.delete({ where: { id: runId } });
+        }
+        break;
+      }
       default:
         this.logger.warn(`Unknown actionType for undo: ${actionType}`);
     }
